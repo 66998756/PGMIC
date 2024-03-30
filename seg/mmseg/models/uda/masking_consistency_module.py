@@ -130,7 +130,7 @@ class MaskingConsistencyModule(Module):
                 strong_parameters, data=masked_img.clone())
 
         # Apply masking to image
-        masked_img = self.mask_gen.mask_image(masked_img)
+        masked_img = self.mask_gen.mask_image(masked_img, masked_lbl)
 
         # Train on masked images
         masked_loss = model.forward_train(

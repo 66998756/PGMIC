@@ -28,6 +28,14 @@ from mmseg.models.utils.visualization import prepare_debug_out, subplotimg
 from mmseg.ops import resize
 
 
+# debug visualize
+labels = {
+    0: 'road', 1: 'sidew', 2: 'build', 3: 'wall', 4: 'fence', 5: 'pole',
+    6: 'tr. light', 7: 'tr. sign', 8: 'veget.', 9: 'terrain', 10: 'sky',
+    11: 'person', 12: 'rider', 13: 'car', 14: 'truck', 15: 'bus', 16: 'train',
+    17: 'm.bike', 18: 'bike'
+}
+
 def entropy_loss(v):
     """
         Entropy loss for probabilistic prediction vectors
@@ -258,4 +266,8 @@ class MinEnt(UDADecorator):
 
         self.local_iter += 1
 
+        # mask_target = [labels[i.item()] for i in mask_target]
+        # mask_target = {"mask_target": ''.join(mask_target)}
+        # print(mask_target)
+        # return {**src_log_vars, **trg_log_vars, "mask_target": mask_target}
         return {**src_log_vars, **trg_log_vars}

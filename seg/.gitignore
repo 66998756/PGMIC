@@ -124,3 +124,7 @@ configs/generated/
 *.pdf
 *.pgf
 visualization/*.png
+
+# data and weight
+/data
+/pretrained/*.pth
