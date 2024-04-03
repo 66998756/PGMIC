@@ -17,7 +17,7 @@ _base_ = [
     '../_base_/schedules/poly10warm.py'
 ]
 # Random Seed
-seed = 2  # seed with median performance
+seed = 0  # seed with median performance
 # HRDA Configuration
 model = dict(
     type='HRDAEncoderDecoder',
@@ -70,7 +70,7 @@ data = dict(
 # MIC Parameters
 uda = dict(
     # Apply masking to color-augmented target images
-    mask_mode='separatetrgaug',
+    mask_mode='separateaug',
     # Use the same teacher alpha for MIC as for DAFormer
     # self-training (0.999)
     mask_alpha='same',
@@ -83,7 +83,7 @@ uda = dict(
     # and a mask ratio of 0.7
     # type of random for original mic, class for pgmic(proposed)
     mask_generator=dict(
-        type='random', mask_ratio=0.7, mask_block_size=64, _delete_=True))
+        type='class', mask_ratio=0.7, mask_block_size=64, _delete_=True))
 # Optimizer Hyperparameters
 optimizer_config = None
 optimizer = dict(
@@ -100,7 +100,7 @@ runner = dict(type='IterBasedRunner', max_iters=80000)
 checkpoint_config = dict(by_epoch=False, interval=80000, max_keep_ckpts=1)
 evaluation = dict(interval=1000, metric='mIoU')
 # Meta Information for Result Analysis
-name = 'gtaHR2csHR_mic_hrda_s2_64x64_b2_m70'
+name = 'gtaHR2csHR_pgmic_hrda_s2_64x64_sandt_m70'
 exp = 'basic'
 name_dataset = 'gtaHR2cityscapesHR_1024x1024'
 name_architecture = 'hrda1-512-0.1_daformer_sepaspp_sl_mitb5'

@@ -95,12 +95,12 @@ class MinEnt(UDADecorator):
         """
 
         optimizer.zero_grad()
-        log_vars = self(**data_batch)
+        log_vars, mask_targets = self(**data_batch)
         optimizer.step()
 
         log_vars.pop('loss', None)  # remove the unnecessary 'loss'
         outputs = dict(
-            log_vars=log_vars, num_samples=len(data_batch['img_metas']))
+            log_vars=log_vars, num_samples=len(data_batch['img_metas']), mask_targets=mask_targets)
         return outputs
 
     def update_debug_state(self):
@@ -182,7 +182,7 @@ class MinEnt(UDADecorator):
         # masking consistency
         masked_log_vars = dict()
         if self.mic is not None:
-            masked_loss = self.mic(self.get_model(), img, img_metas,
+            masked_loss, mask_targets = self.mic(self.get_model(), img, img_metas,
                                    gt_semantic_seg, target_img,
                                    target_img_metas, valid_pseudo_mask)
             seg_debug.update(self.mic.debug_output)
@@ -270,4 +270,4 @@ class MinEnt(UDADecorator):
         # mask_target = {"mask_target": ''.join(mask_target)}
         # print(mask_target)
         # return {**src_log_vars, **trg_log_vars, "mask_target": mask_target}
-        return {**src_log_vars, **trg_log_vars}
+        return {**src_log_vars, **trg_log_vars}, mask_targets

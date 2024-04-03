@@ -40,6 +40,15 @@ from mmseg.models.utils.visualization import prepare_debug_out, subplotimg
 from mmseg.utils.utils import downscale_label_ratio
 
 
+# debug visualize
+labels = {
+    0: 'road', 1: 'sidew', 2: 'build', 3: 'wall', 4: 'fence', 5: 'pole',
+    6: 'tr. light', 7: 'tr. sign', 8: 'veget.', 9: 'terrain', 10: 'sky',
+    11: 'person', 12: 'rider', 13: 'car', 14: 'truck', 15: 'bus', 16: 'train',
+    17: 'm.bike', 18: 'bike'
+}
+
+
 def _params_equal(ema_model, model):
     for ema_param, param in zip(ema_model.named_parameters(),
                                 model.named_parameters()):
@@ -99,6 +108,10 @@ class DACS(UDADecorator):
             self.imnet_model = build_segmentor(deepcopy(cfg['model']))
         else:
             self.imnet_model = None
+        
+        # directed set counter length
+        self.batches_masked_target_counter = [0 for _ in range(19)]
+        self.full_masked_target_counter = [0 for _ in range(19)]
 
     def get_ema_model(self):
         return get_module(self.ema_model)
@@ -427,7 +440,7 @@ class DACS(UDADecorator):
 
         # Masked Training
         if self.enable_masking and self.mask_mode.startswith('separate'):
-            masked_loss = self.mic(self.get_model(), img, img_metas,
+            masked_loss, mask_targets = self.mic(self.get_model(), img, img_metas,
                                    gt_semantic_seg, target_img,
                                    target_img_metas, valid_pseudo_mask,
                                    pseudo_label, pseudo_weight)
@@ -436,6 +449,12 @@ class DACS(UDADecorator):
             masked_loss, masked_log_vars = self._parse_losses(masked_loss)
             log_vars.update(masked_log_vars)
             masked_loss.backward()
+
+            # analize
+            if self.local_iter % self.debug_img_interval != 0 and mask_targets != None:
+                for mask_target in mask_targets:
+                    self.batches_masked_target_counter[mask_target] += 1
+                    self.full_masked_target_counter[mask_target] += 1
 
         if self.local_iter % self.debug_img_interval == 0 and \
                 not self.source_only:
@@ -530,16 +549,46 @@ class DACS(UDADecorator):
                     )
                     for k1, (n1, outs) in enumerate(seg_debug.items()):
                         for k2, (n2, out) in enumerate(outs.items()):
-                            subplotimg(
+                            if n1 == 'Masked':
+                                if mask_targets != None:
+                                    n2 = n2 + ', mask_target: ' + labels[mask_targets[j]]
+                                subplotimg(
                                 axs[k2][k1],
                                 **prepare_debug_out(f'{n1} {n2}', out[j],
                                                     means, stds))
+                            else:
+                                subplotimg(
+                                    axs[k2][k1],
+                                    **prepare_debug_out(f'{n1} {n2}', out[j],
+                                                        means, stds))
                     for ax in axs.flat:
                         ax.axis('off')
                     plt.savefig(
                         os.path.join(out_dir,
                                      f'{(self.local_iter + 1):06d}_{j}_s.png'))
                     plt.close()
+                # analizy
+                if mask_targets != None:
+                    fig, axs = plt.subplots(1, 2, figsize=(10 * 2, 5 * 1), squeeze=False)
+                    x = [labels[i] for i in range(19)]
+                    axs[0][0].bar(x, self.batches_masked_target_counter)
+                    for i, v in enumerate(self.batches_masked_target_counter):
+                        axs[0][0].text(i, v + 0.1, str(v), ha='center', va='bottom')
+                    axs[0][0].set_xticklabels(x, rotation=45)
+                    axs[0][0].set_title('Mask Target Class Counts within a iteration')
+
+                    axs[0][1].bar(x, self.full_masked_target_counter)
+                    for i, v in enumerate(self.full_masked_target_counter):
+                        axs[0][1].text(i, v + 0.1, str(v), ha='center', va='bottom')
+                    axs[0][1].set_xticklabels(x, rotation=45)
+                    axs[0][1].set_title('Mask Target Class Counts within total training')
+                    
+                    plt.savefig(
+                        os.path.join(out_dir,
+                                    f'{(self.local_iter + 1):06d}_count.png'))
+                    plt.close()
+                    
+                    self.batches_masked_target_counter = [0 for _ in range(19)]
                 del seg_debug
         self.local_iter += 1
 

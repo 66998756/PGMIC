@@ -32,44 +32,48 @@ class ClassMaskGenerator:
         ### Implement of Class Masking ###
         input_mask = torch.zeros((B, 1, H, W), device=imgs.device)
 
-        target_classes = []
+        mask_targets = []
         for batch in range(B):
             current_classes = torch.unique(lbls[batch, :, :, :])
-            random_mask_target_class = current_classes[torch.randint(0, len(
+            # ignore "void" class
+            if torch.max(current_classes) == 255:
+                mask = current_classes != 255
+                current_classes = current_classes[mask]
+            mask_target = current_classes[torch.randint(0, len(
                 current_classes), (1,)).item()]
             # manually set mask target class to 3: wall
-            # random_mask_target_class = 3
-            target_classes.append(random_mask_target_class)
+            # mask_target = 3
+            mask_targets.append(mask_target.item())
             
-            class_mask = (lbls[batch, :, :, :] == random_mask_target_class).float()
+            class_mask = (lbls[batch, :, :, :] == mask_target).float()
 
             unfolded_mask = torch.nn.functional.unfold(class_mask.unsqueeze(dim=0), 
                 kernel_size=self.mask_block_size, stride=self.mask_block_size)
 
-            block_mask_indices = torch.any(unfolded_mask.bool(), dim=1)
+            unfolded_block_mask = torch.any(unfolded_mask.bool(), dim=1)
 
-            if torch.sum(block_mask_indices) / block_mask_indices.numel() < self.mask_ratio:
+            if torch.sum(unfolded_block_mask) / unfolded_block_mask.numel() < self.mask_ratio:
                 remain_mask_times = int(
-                    self.mask_ratio * block_mask_indices.numel() - torch.sum(block_mask_indices))
+                    self.mask_ratio * unfolded_block_mask.numel() - torch.sum(unfolded_block_mask))
                 
-                zero_indices = torch.where(block_mask_indices == False)[1]
+                zero_indices = torch.where(unfolded_block_mask == False)[1]
                 random_indices = torch.randperm(len(zero_indices))[:remain_mask_times]
 
-                block_mask_indices[:, zero_indices[random_indices]] = True
+                unfolded_block_mask[:, zero_indices[random_indices]] = True
 
-            block_mask = (~block_mask_indices.expand(unfolded_mask.shape)).float()
-            # unfolded_mask = torch.where(block_mask_indices == 1,
+            block_mask = (~unfolded_block_mask.expand(unfolded_mask.shape)).float()
+            # unfolded_mask = torch.where(unfolded_block_mask == 1,
             #     mask_block_label, non_mask_block_label)
             
             input_mask[batch, :, :, :] = torch.nn.functional.fold(block_mask, lbls.shape[2:],
                 kernel_size=self.mask_block_size, stride=self.mask_block_size)
 
-        return input_mask
+        return input_mask, mask_targets
 
     @torch.no_grad()
     def mask_image(self, imgs, lbls):
-        input_mask = self.generate_mask(imgs, lbls)
-        return imgs * input_mask
+        input_mask, mask_targets = self.generate_mask(imgs, lbls)
+        return imgs * input_mask, mask_targets
 
 
 # original MIC masking method
@@ -93,4 +97,4 @@ class RandomMaskGenerator:
     @torch.no_grad()
     def mask_image(self, imgs, lbls):
         input_mask = self.generate_mask(imgs, lbls)
-        return imgs * input_mask
+        return imgs * input_mask, None

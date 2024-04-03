@@ -128,3 +128,4 @@ visualization/*.png
 # data and weight
 /data
 /pretrained/*.pth
+/work_dirs
