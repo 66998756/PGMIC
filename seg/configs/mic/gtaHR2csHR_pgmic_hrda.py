@@ -17,7 +17,7 @@ _base_ = [
     '../_base_/schedules/poly10warm.py'
 ]
 # Random Seed
-seed = 0  # seed with median performance
+seed = 5  # seed with median performance
 # HRDA Configuration
 model = dict(
     type='HRDAEncoderDecoder',
@@ -70,7 +70,7 @@ data = dict(
 # MIC Parameters
 uda = dict(
     # Apply masking to color-augmented target images
-    mask_mode='separateaug',
+    mask_mode='separatetrgaug',
     # Use the same teacher alpha for MIC as for DAFormer
     # self-training (0.999)
     mask_alpha='same',
@@ -79,11 +79,14 @@ uda = dict(
     mask_pseudo_threshold='same',
     # Equal weighting of MIC loss
     mask_lambda=1,
+    ### class mask weight and scene mask weight
+    class_mask_lambda=0.5,
+    scene_mask_lambda = 0.5,
     # Use random patch masking with a patch size of 64x64
     # and a mask ratio of 0.7
     # type of random for original mic, class for pgmic(proposed)
     mask_generator=dict(
-        type='class', mask_ratio=0.7, mask_block_size=64, _delete_=True))
+        type='dual', mask_ratio=0.7, mask_block_size=64, _delete_=True))
 # Optimizer Hyperparameters
 optimizer_config = None
 optimizer = dict(
@@ -95,12 +98,13 @@ optimizer = dict(
             norm=dict(decay_mult=0.0))))
 n_gpus = 1
 gpu_model = 'NVIDIAA40'
-runner = dict(type='IterBasedRunner', max_iters=80000)
+runner = dict(type='IterBasedRunner', max_iters=40000)
 # Logging Configuration
-checkpoint_config = dict(by_epoch=False, interval=80000, max_keep_ckpts=1)
+checkpoint_config = dict(by_epoch=False, interval=40000, max_keep_ckpts=1)
 evaluation = dict(interval=1000, metric='mIoU')
 # Meta Information for Result Analysis
-name = 'gtaHR2csHR_pgmic_hrda_s2_64x64_sandt_m70'
+name = 'gtaHR21csHR_crpgmic_hrda_s5_64x64_m70_iter80k'
+# name = 'debug'
 exp = 'basic'
 name_dataset = 'gtaHR2cityscapesHR_1024x1024'
 name_architecture = 'hrda1-512-0.1_daformer_sepaspp_sl_mitb5'

@@ -549,7 +549,7 @@ class DACS(UDADecorator):
                     )
                     for k1, (n1, outs) in enumerate(seg_debug.items()):
                         for k2, (n2, out) in enumerate(outs.items()):
-                            if n1 == 'Masked':
+                            if 'Masked' in n1:
                                 if mask_targets != None:
                                     n2 = n2 + ', mask_target: ' + labels[mask_targets[j]]
                                 subplotimg(

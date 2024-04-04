@@ -27,6 +27,12 @@ class MaskingConsistencyModule(Module):
         self.mask_alpha = cfg['mask_alpha']
         self.mask_pseudo_threshold = cfg['mask_pseudo_threshold']
         self.mask_lambda = cfg['mask_lambda']
+        self.class_mask_lambda = cfg['class_mask_lambda']
+        self.scene_mask_lambda = cfg['scene_mask_lambda']
+
+        if cfg['mask_generator']['type'] == 'dual':
+            self.lambda_weight = [self.class_mask_lambda, self.scene_mask_lambda]
+        
         self.mask_gen = build_mask_generator(cfg['mask_generator'])
 
         assert self.mask_mode in [
@@ -130,22 +136,61 @@ class MaskingConsistencyModule(Module):
                 strong_parameters, data=masked_img.clone())
 
         # Apply masking to image
-        masked_img, mask_targets = self.mask_gen.mask_image(masked_img, masked_lbl)
+        masked_imgs, mask_targets = self.mask_gen.mask_image(masked_img, masked_lbl)
 
         # Train on masked images
-        masked_loss = model.forward_train(
-            masked_img,
-            img_metas,
-            masked_lbl,
-            seg_weight=masked_seg_weight,
-        )
-        if self.mask_lambda != 1:
-            masked_loss['decode.loss_seg'] *= self.mask_lambda
+        masked_losses = []
+        for idx, masked_img in enumerate(masked_imgs):
+            masked_losses.append(model.forward_train(
+                masked_img,
+                img_metas,
+                masked_lbl,
+                seg_weight=masked_seg_weight,
+            ))
+            
+            if self.debug:
+                self.debug_output['Masked_{}'.format(idx)] = model.debug_output
+                if masked_seg_weight is not None:
+                    self.debug_output['Masked_{}'.format(idx)]['PL Weight'] = \
+                        masked_seg_weight.cpu().numpy()
 
-        if self.debug:
-            self.debug_output['Masked'] = model.debug_output
-            if masked_seg_weight is not None:
-                self.debug_output['Masked']['PL Weight'] = \
-                    masked_seg_weight.cpu().numpy()
 
-        return masked_loss, mask_targets
+        # original MIC
+        if self.lambda_weight == None:
+            masked_loss = masked_losses[0]
+
+            if self.mask_lambda != 1:
+                masked_loss['decode.loss_seg'] *= self.mask_lambda
+
+            if self.debug:
+                self.debug_output['Masked'] = model.debug_output
+                if masked_seg_weight is not None:
+                    self.debug_output['Masked']['PL Weight'] = \
+                        masked_seg_weight.cpu().numpy()
+            
+            return masked_loss, mask_targets
+
+        # Class and scene consistency
+        elif self.lambda_weight != None:
+            for i, mask_lambda in enumerate(self.lambda_weight):
+                masked_losses[i]['decode.loss_seg'] *= mask_lambda
+        
+            masked_loss = {}
+            for key, value in masked_losses[0].items():
+                masked_loss[key] = value
+
+            for key, value in masked_losses[1].items():
+                masked_loss[key] += value
+                if key != 'decode.loss_seg':
+                    masked_loss[key] /= 2
+            
+            if self.mask_lambda != 1:
+                masked_loss['decode.loss_seg'] *= self.mask_lambda
+
+            # if self.debug:
+            #     self.debug_output['Masked'] = model.debug_output
+            #     if masked_seg_weight is not None:
+            #         self.debug_output['Masked']['PL Weight'] = \
+            #             masked_seg_weight.cpu().numpy()
+
+            return masked_loss, mask_targets
