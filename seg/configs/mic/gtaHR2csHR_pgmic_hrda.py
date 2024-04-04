@@ -17,7 +17,7 @@ _base_ = [
     '../_base_/schedules/poly10warm.py'
 ]
 # Random Seed
-seed = 5  # seed with median performance
+seed = 0  # seed with median performance
 # HRDA Configuration
 model = dict(
     type='HRDAEncoderDecoder',
@@ -103,7 +103,7 @@ runner = dict(type='IterBasedRunner', max_iters=40000)
 checkpoint_config = dict(by_epoch=False, interval=40000, max_keep_ckpts=1)
 evaluation = dict(interval=1000, metric='mIoU')
 # Meta Information for Result Analysis
-name = 'gtaHR21csHR_crpgmic_hrda_s5_64x64_m70_iter80k'
+name = 'gtaHR21csHR_crpgmic_hrda_s0_64x64_m70_iter40k'
 # name = 'debug'
 exp = 'basic'
 name_dataset = 'gtaHR2cityscapesHR_1024x1024'
