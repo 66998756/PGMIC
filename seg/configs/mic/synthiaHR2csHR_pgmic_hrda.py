@@ -104,11 +104,11 @@ runner = dict(type='IterBasedRunner', max_iters=40000)
 checkpoint_config = dict(by_epoch=False, interval=40000, max_keep_ckpts=1)
 evaluation = dict(interval=1000, metric='mIoU')
 # Meta Information for Result Analysis
-name = 'gtaHR21csHR_crpgmic_withDHA_hrda_s2_64x64_m70_iter40k'
+name = 'gtaHR21csHR_crpgmic_hrda_s2_w1_64x64_m70_iter60k'
 # name = 'synthiaHR2csHR_mic_hrda_s2_64x64_m70_iter80k'
 # name = 'debug'
 exp = 'basic'
-name_dataset = 'gtaHR2cityscapesHR_1024x1024'
+name_dataset = 'synthiaHR2cityscapesHR_1024x1024'
 name_architecture = 'hrda1-512-0.1_daformer_sepaspp_sl_mitb5'
 name_encoder = 'mitb5'
 name_decoder = 'hrda1-512-0.1_daformer_sepaspp_sl'

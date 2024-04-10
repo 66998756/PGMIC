@@ -443,7 +443,8 @@ class DACS(UDADecorator):
             masked_loss, mask_targets = self.mic(self.get_model(), img, img_metas,
                                    gt_semantic_seg, target_img,
                                    target_img_metas, valid_pseudo_mask,
-                                   pseudo_label, pseudo_weight)
+                                   pseudo_label, pseudo_weight,
+                                   self.local_iter)
             seg_debug.update(self.mic.debug_output)
             masked_loss = add_prefix(masked_loss, 'masked')
             masked_loss, masked_log_vars = self._parse_losses(masked_loss)
