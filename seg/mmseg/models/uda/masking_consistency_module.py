@@ -68,7 +68,7 @@ class MaskingConsistencyModule(Module):
                  valid_pseudo_mask,
                  pseudo_label=None,
                  pseudo_weight=None,
-                 local_iter=0):
+                 local_hint_ratio=0.0):
         self.update_debug_state()
         self.debug_output = {}
         model.debug_output = {}
@@ -138,7 +138,8 @@ class MaskingConsistencyModule(Module):
                 strong_parameters, data=masked_img.clone())
 
         # Apply masking to image
-        masked_imgs, mask_targets = self.mask_gen.mask_image(masked_img, masked_lbl, local_iter, self.max_iters)
+        masked_imgs, mask_targets, hint_patch_nums = self.mask_gen.mask_image(
+            masked_img, masked_lbl, local_hint_ratio)
 
         # Train on masked images
         masked_losses = []
@@ -194,4 +195,4 @@ class MaskingConsistencyModule(Module):
                     self.debug_output['Masked']['PL Weight'] = \
                         masked_seg_weight.cpu().numpy()
             
-            return masked_loss, mask_targets
+            return masked_loss, mask_targets, hint_patch_nums

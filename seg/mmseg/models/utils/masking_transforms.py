@@ -49,16 +49,15 @@ class ClassMaskGenerator:
 
 
     @torch.no_grad()
-    def generate_mask(self, imgs, lbls, steps, max_iter):
+    def generate_mask(self, imgs, lbls, local_hint_ratio):
         B, C, H, W = imgs.shape
         ### Implement of Class Masking ###
         input_mask = torch.zeros((B, 1, H, W), device=imgs.device)
 
-        mask_targets = []
+        mask_targets, hint_patch_nums = [], []
         for batch in range(B):
             current_classes = torch.unique(lbls[batch])
             # ignore "void" class
-            # if torch.max(current_classes) == 255:
             void_mask = current_classes != 255
             current_classes = current_classes[void_mask]
             
@@ -72,44 +71,46 @@ class ClassMaskGenerator:
 
             unfolded_mask = torch.nn.functional.unfold(class_mask.unsqueeze(dim=0), 
                 kernel_size=self.mask_block_size, stride=self.mask_block_size)
+            # True for mask patch, False for appear patch
             unfolded_block_mask = torch.any(unfolded_mask.bool(), dim=1)
 
             # dynamc hint adjustment
-            if self.hint_ratio > 0:
-                local_hint_ratio = self.hint_ratio * (1 - (steps/max_iter))
+            if self.hint_ratio > 0.0:
                 hint_block_mask, hint_patch_num = self.DHA(unfolded_block_mask, local_hint_ratio)
+                hint_patch_nums.append(hint_patch_num)
             else:
                 hint_block_mask = unfolded_block_mask
 
             # add remain mask block
+            operation_mask = torch.zeros(unfolded_block_mask.shape, dtype=bool, device=imgs.device)
             if torch.sum(hint_block_mask) / unfolded_block_mask.numel() < self.mask_ratio:
                 remain_mask_times = int(
                     self.mask_ratio * unfolded_block_mask.numel() - torch.sum(hint_block_mask))
-                remain_mask_times = remain_mask_times + hint_patch_num if self.hint_ratio > 0 else remain_mask_times
-
+                
                 zero_indices = torch.where(unfolded_block_mask == False)[1]
                 random_indices = torch.randperm(len(zero_indices))[:remain_mask_times]
 
-                unfolded_block_mask[:, zero_indices[random_indices]] = True
+                operation_mask[:, zero_indices[random_indices]] = True
 
             # final mask
-            final_block_mask = torch.logical_or(unfolded_block_mask, hint_block_mask)
+            final_block_mask = torch.logical_or(operation_mask, hint_block_mask)
             block_mask = (~final_block_mask.expand(unfolded_mask.shape)).float()
             
             input_mask[batch, :, :, :] = torch.nn.functional.fold(block_mask, lbls.shape[2:],
                 kernel_size=self.mask_block_size, stride=self.mask_block_size)
 
-        return [input_mask], mask_targets
+        return [input_mask], mask_targets, hint_patch_nums
 
     @torch.no_grad()
-    def mask_image(self, imgs, lbls, steps, max_iter):
+    def mask_image(self, imgs, lbls, local_hint_ratio):
         return_imgs = []
-        input_maskes, mask_targets = self.generate_mask(imgs, lbls, steps, max_iter)
+        input_maskes, mask_targets, hint_patch_nums = self.generate_mask(imgs, lbls, local_hint_ratio)
         for mask in input_maskes:
             return_imgs.append(imgs * mask)
-        return return_imgs, mask_targets
+        return return_imgs, mask_targets, hint_patch_nums
 
 
+# brocken
 class SceneMaskGenerator:
 
     def __init__(self, mask_ratio, mask_block_size):
@@ -168,6 +169,7 @@ class SceneMaskGenerator:
         return return_imgs, mask_targets
     
 
+# brocken
 class DualMaskGenerator:
 
     def __init__(self, mask_ratio, mask_block_size):

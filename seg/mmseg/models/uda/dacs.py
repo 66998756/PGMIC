@@ -103,6 +103,7 @@ class DACS(UDADecorator):
             self.ema_model = build_segmentor(ema_cfg)
         self.mic = None
         if self.enable_masking:
+            self.max_hint_ratio = cfg['mask_generator']['mask_ratio']
             self.mic = MaskingConsistencyModule(require_teacher=False, cfg=cfg)
         if self.enable_fdist:
             self.imnet_model = build_segmentor(deepcopy(cfg['model']))
@@ -440,11 +441,13 @@ class DACS(UDADecorator):
 
         # Masked Training
         if self.enable_masking and self.mask_mode.startswith('separate'):
-            masked_loss, mask_targets = self.mic(self.get_model(), img, img_metas,
+            local_hint_ratio = self.max_hint_ratio * (1 - (self.local_iter/self.max_iters))
+            masked_loss, mask_targets, hint_patch_nums = self.mic(
+                                   self.get_model(), img, img_metas,
                                    gt_semantic_seg, target_img,
                                    target_img_metas, valid_pseudo_mask,
                                    pseudo_label, pseudo_weight,
-                                   self.local_iter)
+                                   local_hint_ratio)
             seg_debug.update(self.mic.debug_output)
             masked_loss = add_prefix(masked_loss, 'masked')
             masked_loss, masked_log_vars = self._parse_losses(masked_loss)
@@ -552,7 +555,9 @@ class DACS(UDADecorator):
                         for k2, (n2, out) in enumerate(outs.items()):
                             if 'Masked' in n1:
                                 if mask_targets != None:
-                                    n2 = n2 + ', mask_target: ' + labels[mask_targets[j]]
+                                    n2 = n2 + ', mask_target: ' + labels[mask_targets[j]] + \
+                                         'hint prob.: {}({})'.format(
+                                             local_hint_ratio, hint_patch_nums[j])
                                 subplotimg(
                                 axs[k2][k1],
                                 **prepare_debug_out(f'{n1} {n2}', out[j],

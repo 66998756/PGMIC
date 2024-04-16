@@ -81,13 +81,14 @@ uda = dict(
     # Equal weighting of MIC loss
     mask_lambda=1,
     ### class mask weight and scene mask weight
-    class_mask_lambda=1,
-    scene_mask_lambda=1,
+    class_mask_lambda=0.5,
+    scene_mask_lambda=0.5,
     # Use random patch masking with a patch size of 64x64
     # and a mask ratio of 0.7
-    # type of random for original mic, class for pgmic(proposed)
+    # type of 'random' for original mic, 'class' for pgmic(proposed)
+    # 'dual' for scpgmic(still working), mask_ratio for Dynamic Hint Adjustment
     mask_generator=dict(
-        type='class', mask_ratio=0.7, mask_block_size=64, hint_ratio=0.3, _delete_=True))
+        type='class', mask_ratio=0.7, mask_block_size=64, hint_ratio=0.2, _delete_=True))
 # Optimizer Hyperparameters
 optimizer_config = None
 optimizer = dict(
@@ -104,7 +105,7 @@ runner = dict(type='IterBasedRunner', max_iters=40000)
 checkpoint_config = dict(by_epoch=False, interval=40000, max_keep_ckpts=1)
 evaluation = dict(interval=1000, metric='mIoU')
 # Meta Information for Result Analysis
-name = 'gtaHR21csHR_crpgmic_withDHA_hrda_s2_64x64_m70_iter40k'
+name = 'gtaHR21csHR_pgmic_withDHA_hrda_s2_64x64_m70_iter60k'
 # name = 'synthiaHR2csHR_mic_hrda_s2_64x64_m70_iter80k'
 # name = 'debug'
 exp = 'basic'
