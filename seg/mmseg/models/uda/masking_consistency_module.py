@@ -14,6 +14,10 @@ from mmseg.models.utils.masking_transforms import build_mask_generator
 
 from mmseg.models.utils.masking_transforms import DualMaskGenerator, ClassMaskGenerator, SceneMaskGenerator
 
+# 一些嘗試
+from mmseg.models.utils.randaugment import RandAugment
+
+
 class MaskingConsistencyModule(Module):
 
     def __init__(self, require_teacher, cfg):
@@ -28,11 +32,6 @@ class MaskingConsistencyModule(Module):
         self.mask_alpha = cfg['mask_alpha']
         self.mask_pseudo_threshold = cfg['mask_pseudo_threshold']
         self.mask_lambda = cfg['mask_lambda']
-        self.class_mask_lambda = cfg['class_mask_lambda']
-        self.scene_mask_lambda = cfg['scene_mask_lambda']
-
-        if cfg['mask_generator']['type'] == 'dual':
-            self.lambda_weight = [self.class_mask_lambda, self.scene_mask_lambda]
         
         self.mask_gen = build_mask_generator(cfg['mask_generator'])
 
@@ -49,6 +48,15 @@ class MaskingConsistencyModule(Module):
 
         self.debug = False
         self.debug_output = {}
+
+        # 一些嘗試
+        self.consistency_mode = cfg['consistency_mode']
+        if self.consistency_mode == 'fixmatch_like':
+            self.strong_augment = RandAugment(0, 30)
+        self.consistency_lambda = cfg['consistency_lambda']
+
+        if cfg['consistency_lambda'] != None:
+            self.lambda_weight = [self.mask_lambda, self.consistency_lambda]
 
     def update_weights(self, model, iter):
         if self.teacher is not None:
@@ -143,11 +151,45 @@ class MaskingConsistencyModule(Module):
             }
             masked_img, _ = strong_transform(
                 strong_parameters, data=masked_img.clone())
+        
+        # 一些嘗試，應該要額外寫成API
+        if self.consistency_mode == 'unimatch_like':
+            strong_parameters = {
+                'mix': None,
+                'color_jitter': random.uniform(0, 1),
+                'color_jitter_s': {
+                    'brightness': 0.5,
+                    'contrast': 0.5,
+                    'saturation': 0.5,
+                    'hue': 0.25,
+                },
+                'color_jitter_p': self.color_jitter_p,
+                'blur': random.uniform(0, 1),
+                'mean': means[0].unsqueeze(0),
+                'std': stds[0].unsqueeze(0)
+            }
+            auged_img, _ = strong_transform(
+                strong_parameters, data=target_img.clone(), mode='unimatch')
+        elif self.consistency_mode == 'fixmatch_like':
+            strong_parameters = {
+                'mix': None,
+                'color_jitter': random.uniform(0, 1),
+                'color_jitter_s': self.color_jitter_s,
+                'color_jitter_p': self.color_jitter_p,
+                'blur': random.uniform(0, 1),
+                'mean': means[0].unsqueeze(0),
+                'std': stds[0].unsqueeze(0)
+            }
+            auged_img, _ = strong_transform(
+                strong_parameters, data=masked_img.clone())
+            auged_img = self.strong_augment(auged_img)
+            
+
 
         # Apply masking to image
         pseudo_label_region = valid_pseudo_mask.clone().bool()
         masked_imgs, mask_targets, hint_patch_nums = self.mask_gen.mask_image(
-            masked_img, masked_lbl, pseudo_label_region, local_hint_ratio)
+            masked_img, masked_lbl, pseudo_label_region, local_hint_ratio, mix=auged_img)
 
         # Train on masked images
         masked_losses = []
@@ -159,28 +201,30 @@ class MaskingConsistencyModule(Module):
                 seg_weight=masked_seg_weight,
             ))
             
-            if self.debug and isinstance(self.mask_gen, DualMaskGenerator):
-                self.debug_output['Masked_{}'.format(idx)] = model.debug_output
+            # if self.debug and len(self.lambda_weight) > 1:
+            #     self.debug_output['Masked_{}'.format(idx)] = model.debug_output
+            #     if masked_seg_weight is not None:
+            #         self.debug_output['Masked_{}'.format(idx)]['PL Weight'] = \
+            #             masked_seg_weight.cpu().numpy()
+            if self.debug and self.consistency_mode == 'unimatch_like':
+                self.debug_output['Fused' if idx % 2 else 'Masked'] = model.debug_output
                 if masked_seg_weight is not None:
-                    self.debug_output['Masked_{}'.format(idx)]['PL Weight'] = \
+                    self.debug_output['Fused' if idx % 2 else 'Masked']['PL Weight'] = \
                         masked_seg_weight.cpu().numpy()
 
         # Class and scene consistency
-        if isinstance(self.mask_gen, DualMaskGenerator):
-            for i, mask_lambda in enumerate(self.lambda_weight):
-                masked_losses[i]['decode.loss_seg'] *= mask_lambda
+        # if isinstance(self.mask_gen, DualMaskGenerator):
+        if len(masked_losses) > 1:
+            for i, weight in enumerate(self.lambda_weight):
+                for key in masked_losses[i].keys():
+                    masked_losses[i][key] *= weight
         
             masked_loss = {}
             for key, value in masked_losses[0].items():
                 masked_loss[key] = value
-
-            for key, value in masked_losses[1].items():
-                masked_loss[key] += value
-                if key != 'decode.loss_seg':
-                    masked_loss[key] /= 2
             
-            if self.mask_lambda != 1:
-                masked_loss['decode.loss_seg'] *= self.mask_lambda
+            # if self.mask_lambda != 1:
+            #     masked_loss['decode.loss_seg'] *= self.mask_lambda
 
             # if self.debug:
             #     self.debug_output['Masked'] = model.debug_output
@@ -188,7 +232,7 @@ class MaskingConsistencyModule(Module):
             #         self.debug_output['Masked']['PL Weight'] = \
             #             masked_seg_weight.cpu().numpy()
 
-            return masked_loss, mask_targets
+            return masked_loss, mask_targets, hint_patch_nums
     
         # original MIC
         else:

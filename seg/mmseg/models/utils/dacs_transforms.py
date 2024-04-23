@@ -7,19 +7,45 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from torchvision import transforms
+from randaugment import RandAugment
 
-def strong_transform(param, data=None, target=None):
+
+def strong_transform(param, data=None, target=None, mode=None):
     assert ((data is not None) or (target is not None))
     data, target = one_mix(mask=param['mix'], data=data, target=target)
-    data, target = color_jitter(
-        color_jitter=param['color_jitter'],
-        s=param['color_jitter_s'],
-        p=param['color_jitter_p'],
-        mean=param['mean'],
-        std=param['std'],
-        data=data,
-        target=target)
-    data, target = gaussian_blur(blur=param['blur'], data=data, target=target)
+    
+    if mode == 'unimatch':
+        data, target = color_jitter(
+            color_jitter=param['color_jitter'],
+            s=param['color_jitter_s'],
+            p=param['color_jitter_p'],
+            mean=param['mean'],
+            std=param['std'],
+            data=data,
+            target=target)
+        data = unimatch_gray_scale(data)
+        data, target = unimatch_blur(blur=param['blur'], data=data, target=target)
+        
+    elif mode == 'fixmatch':
+        augment = RandAugment()
+        data = apply_randaugment(
+            data, 
+            mean=param['mean'], 
+            std=param['std'],
+            transform=augment)
+        
+    else:
+        data, target = color_jitter(
+            color_jitter=param['color_jitter'],
+            s=param['color_jitter_s'],
+            p=param['color_jitter_p'],
+            mean=param['mean'],
+            std=param['std'],
+            data=data,
+            target=target)
+        data, target = gaussian_blur(blur=param['blur'], data=data, target=target)
+
     return data, target
 
 
@@ -118,3 +144,36 @@ def one_mix(mask, data=None, target=None):
         target = (stackedMask0 * target[0] +
                   (1 - stackedMask0) * target[1]).unsqueeze(0)
     return data, target
+
+
+###### UniMatch 中 transform 的實現
+def unimatch_blur(blur, data=None, target=None):
+    if not (data is None):
+        if data.shape[1] == 3:
+            if blur > 0.5:
+                sigma = np.random.uniform(0.1, 2.0)
+                kernel_size_y = int(
+                    np.floor(
+                        np.ceil(0.1 * data.shape[2]) - 0.5 +
+                        np.ceil(0.1 * data.shape[2]) % 2))
+                kernel_size_x = int(
+                    np.floor(
+                        np.ceil(0.1 * data.shape[3]) - 0.5 +
+                        np.ceil(0.1 * data.shape[3]) % 2))
+                kernel_size = (kernel_size_y, kernel_size_x)
+                seq = nn.Sequential(
+                    kornia.filters.GaussianBlur2d(
+                        kernel_size=kernel_size, sigma=(sigma, sigma)))
+                data = seq(data)
+    return data, target
+
+
+def unimatch_gray_scale(data):
+    data = transforms.RandomGrayscale(p=0.2)(data)
+    return data
+
+
+def apply_randaugment(data, mean, std, transform):
+    denorm_(data, mean, std)
+    data = transform(data)
+    renorm_(data, mean, std)

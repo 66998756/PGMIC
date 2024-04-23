@@ -105,12 +105,15 @@ class ClassMaskGenerator:
         return [input_mask], mask_targets, hint_patch_nums
 
     @torch.no_grad()
-    def mask_image(self, imgs, lbls, pseudo_label_region, local_hint_ratio):
+    def mask_image(self, imgs, lbls, pseudo_label_region, local_hint_ratio, mix=None):
         return_imgs = []
         input_maskes, mask_targets, hint_patch_nums = self.generate_mask(
             imgs, lbls, pseudo_label_region, local_hint_ratio)
         for mask in input_maskes:
             return_imgs.append(imgs * mask)
+            if mix != None:
+                imgs[mask.expand(imgs.shape) == 0] = mix[mask.expand(imgs.shape) == 0]
+                return_imgs.append(imgs)
         return return_imgs, mask_targets, hint_patch_nums
 
 
