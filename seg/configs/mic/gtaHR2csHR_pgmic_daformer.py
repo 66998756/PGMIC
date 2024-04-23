@@ -8,7 +8,8 @@ _base_ = [
     # DAFormer Network Architecture
     '../_base_/models/daformer_sepaspp_mitb5.py',
     # GTA->Cityscapes High-Resolution Data Loading
-    '../_base_/datasets/uda_gtaHR_to_cityscapesHR_1024x1024.py',
+    '../_base_/datasets/uda_gta_to_cityscapes_512x512.py',
+    # '../_base_/datasets/uda_gtaHR_to_cityscapesHR_1024x1024.py',
     # '../_base_/datasets/uda_synthiaHR_to_cityscapesHR_1024x1024.py',
     # DAFormer Self-Training
     '../_base_/uda/dacs_a999_fdthings.py',
@@ -21,27 +22,36 @@ _base_ = [
 seed = 2  # seed with median performance
 # HRDA Configuration
 model = dict(
-    type='HRDAEncoderDecoder',
+    type='EncoderDecoder',
+    pretrained='pretrained/mit_b5.pth',
+    backbone=dict(type='mit_b5', style='pytorch'),
     decode_head=dict(
-        type='HRDAHead',
-        # Use the DAFormer decoder for each scale.
-        single_scale_head='DAFormerHead',
-        # Learn a scale attention for each class channel of the prediction.
-        attention_classwise=True,
-        # Set the detail loss weight $\lambda_d=0.1$.
-        hr_loss_weight=0.1),
-    # Use the full resolution for the detail crop and half the resolution for
-    # the context crop.
-    scales=[1, 0.5],
-    # Use a relative crop size of 0.5 (=512/1024) for the detail crop.
-    hr_crop_size=(512, 512),
-    # Use LR features for the Feature Distance as in the original DAFormer.
-    feature_scale=0.5,
-    # Make the crop coordinates divisible by 8 (output stride = 4,
-    # downscale factor = 2) to ensure alignment during fusion.
-    crop_coord_divisible=8,
-    # Use overlapping slide inference for detail crops for pseudo-labels.
-    hr_slide_inference=True,
+        type='DAFormerHead',
+        in_channels=[64, 128, 320, 512],
+        in_index=[0, 1, 2, 3],
+        channels=256,
+        dropout_ratio=0.1,
+        num_classes=19,
+        norm_cfg=dict(type='BN', requires_grad=True),
+        align_corners=False,
+        decoder_params=dict(
+            embed_dims=256,
+            embed_cfg=dict(type='mlp', act_cfg=None, norm_cfg=None),
+            embed_neck_cfg=dict(type='mlp', act_cfg=None, norm_cfg=None),
+            fusion_cfg=dict(
+                type='aspp',
+                sep=True,
+                dilations=(1, 6, 12, 18),
+                pool=False,
+                act_cfg=dict(type='ReLU'),
+                norm_cfg=dict(type='BN', requires_grad=True))),
+        loss_decode=dict(
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
+    train_cfg=dict(
+        log_config=dict(
+            interval=50,
+            img_interval=1000,
+            hooks=[dict(type='TextLoggerHook', by_epoch=False)])),
     # Use overlapping slide inference for fused crops during test time.
     test_cfg=dict(
         mode='slide',
@@ -105,9 +115,9 @@ runner = dict(type='IterBasedRunner', max_iters=40000)
 checkpoint_config = dict(by_epoch=False, interval=40000, max_keep_ckpts=1)
 evaluation = dict(interval=1000, metric='mIoU')
 # Meta Information for Result Analysis
-name = 'gtaHR21csHR_pgmic_withDHA_hrda_s2_64x64_m70_iter60k'
+# name = 'gtaHR21csHR_pgmic_withDHA_hrda_s2_64x64_m70_iter60k'
 # name = 'synthiaHR2csHR_mic_hrda_s2_64x64_m70_iter80k'
-# name = 'debug'
+name = 'debug'
 exp = 'basic'
 name_dataset = 'gtaHR2cityscapesHR_1024x1024'
 name_architecture = 'hrda1-512-0.1_daformer_sepaspp_sl_mitb5'

@@ -87,7 +87,7 @@ uda = dict(
     # and a mask ratio of 0.7
     # type of random for original mic, class for pgmic(proposed)
     mask_generator=dict(
-        type='class', mask_ratio=0.7, mask_block_size=64, hint_ratio=0.0, _delete_=True))
+        type='class', mask_ratio=0.7, mask_block_size=64, hint_ratio=0.15, _delete_=True))
 # Optimizer Hyperparameters
 optimizer_config = None
 optimizer = dict(
@@ -99,13 +99,13 @@ optimizer = dict(
             norm=dict(decay_mult=0.0))))
 n_gpus = 1
 gpu_model = 'NVIDIAA40'
-runner = dict(type='IterBasedRunner', max_iters=80000)
+runner = dict(type='IterBasedRunner', max_iters=40000)
 # Logging Configuration
-checkpoint_config = dict(by_epoch=False, interval=80000, max_keep_ckpts=1)
+checkpoint_config = dict(by_epoch=False, interval=40000, max_keep_ckpts=1)
 evaluation = dict(interval=1000, metric='mIoU')
 # Meta Information for Result Analysis
 # name = 'gtaHR21csHR_pgmic_hrda_s2_64x64_m70_iter60k'
-name = 'synthiaHR2csHR_pgmic_hrda_s2_64x64_m70_iter80k'
+name = 'synthiaHR2csHR_pgmic_DHA_hrda_s2_64x64_m70_iter40k'
 # name = 'debug'
 exp = 'basic'
 name_dataset = 'synthiaHR2cityscapesHR_1024x1024'

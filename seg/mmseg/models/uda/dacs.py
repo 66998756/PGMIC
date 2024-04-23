@@ -103,7 +103,7 @@ class DACS(UDADecorator):
             self.ema_model = build_segmentor(ema_cfg)
         self.mic = None
         if self.enable_masking:
-            self.max_hint_ratio = cfg['mask_generator']['mask_ratio']
+            self.max_hint_ratio = cfg['mask_generator']['hint_ratio']
             self.mic = MaskingConsistencyModule(require_teacher=False, cfg=cfg)
         if self.enable_fdist:
             self.imnet_model = build_segmentor(deepcopy(cfg['model']))
@@ -555,9 +555,12 @@ class DACS(UDADecorator):
                         for k2, (n2, out) in enumerate(outs.items()):
                             if 'Masked' in n1:
                                 if mask_targets != None:
-                                    n2 = n2 + ', mask_target: ' + labels[mask_targets[j]] + \
-                                         'hint prob.: {}({})'.format(
-                                             local_hint_ratio, hint_patch_nums[j])
+                                    if hint_patch_nums:
+                                        n2 = n2 + '\nmask_target: ' + labels[mask_targets[j]] + \
+                                            ', hint_prob: {}({})'.format(
+                                                local_hint_ratio, round(hint_patch_nums[j], 4))
+                                    else:
+                                        n2 = n2 + '\nmask_target: ' + labels[mask_targets[j]]
                                 subplotimg(
                                 axs[k2][k1],
                                 **prepare_debug_out(f'{n1} {n2}', out[j],

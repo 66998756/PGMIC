@@ -21,8 +21,8 @@ class MaskingConsistencyModule(Module):
 
         self.source_only = cfg.get('source_only', False)
         self.max_iters = cfg['max_iters']
-        self.color_jitter_s = cfg['color_jitter_strength']
-        self.color_jitter_p = cfg['color_jitter_probability']
+        self.color_jitter_s = cfg['color_jitter_strength'] # 0.2
+        self.color_jitter_p = cfg['color_jitter_probability'] # 0.2
 
         self.mask_mode = cfg['mask_mode']
         self.mask_alpha = cfg['mask_alpha']
@@ -123,7 +123,14 @@ class MaskingConsistencyModule(Module):
         else:
             raise NotImplementedError(self.mask_mode)
 
-        # Apply color augmentation
+        ### Apply color augmentation
+        # 參照 UniMatch 可以修改成 cutmix
+        # 注意在 strong_transform 中 ColorJitter 參數都是相同的 self.color_jitter_s
+        # ColorJitter(brightness, contrast, saturation, hue)
+        # UniMatch 是 [0.5, 0.5, 0.5, 0.25]，接著做RandomGrayscale(p=0.2)
+        # blur prob.=0.5, sigma=random.uniform(0.1, 2.0)
+        # MIC 的 blur 單純是機率， sigma = np.random.uniform(0.15, 1.15)
+        # 最後做 cutmix (見unimatch) (應該是相同的圖做兩個不同程度的aug後cutmix)
         if 'aug' in self.mask_mode:
             strong_parameters = {
                 'mix': None,
@@ -138,8 +145,9 @@ class MaskingConsistencyModule(Module):
                 strong_parameters, data=masked_img.clone())
 
         # Apply masking to image
+        pseudo_label_region = valid_pseudo_mask.clone().bool()
         masked_imgs, mask_targets, hint_patch_nums = self.mask_gen.mask_image(
-            masked_img, masked_lbl, local_hint_ratio)
+            masked_img, masked_lbl, pseudo_label_region, local_hint_ratio)
 
         # Train on masked images
         masked_losses = []

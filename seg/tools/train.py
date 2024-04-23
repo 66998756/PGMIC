@@ -25,6 +25,9 @@ from mmseg.utils import collect_env, get_root_logger
 from mmseg.utils.collect_env import gen_code_archive
 
 
+import logging
+
+
 def parse_args(args):
     parser = argparse.ArgumentParser(description='Train a segmentor')
     parser.add_argument('config', help='train config file path')
@@ -116,6 +119,13 @@ def main(args):
     log_file = osp.join(cfg.work_dir, f'{timestamp}.log')
     logger = get_root_logger(log_file=log_file, log_level=cfg.log_level)
 
+    # 讓 log 和 progress bar 不要衝突
+    # for handler in logger.handlers:
+    #     if isinstance(handler, logging.StreamHandler):
+    #         handler.stream = sys.stderr
+    # log_handler = logging.StreamHandler(sys.stderr)
+    # logger.addHandler(log_handler)
+
     # init the meta dict to record some important information such as
     # environment info and seed, which will be logged
     meta = dict()
@@ -129,7 +139,10 @@ def main(args):
 
     # log some basic info
     logger.info(f'Distributed training: {distributed}')
-    logger.info(f'Config:\n{cfg.pretty_text}')
+
+    # 有需要再印
+    # logger.info(f'Config:\n{cfg.pretty_text}')
+    logger.info(f'Config:\n Just check file.')
 
     # set random seeds
     if args.seed is None and 'seed' in cfg:
@@ -147,7 +160,8 @@ def main(args):
         cfg, train_cfg=cfg.get('train_cfg'), test_cfg=cfg.get('test_cfg'))
     model.init_weights()
 
-    logger.info(model)
+    # 有需要再印
+    # logger.info(model)
 
     datasets = [build_dataset(cfg.data.train)]
     if len(cfg.workflow) == 2:

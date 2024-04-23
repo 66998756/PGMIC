@@ -49,14 +49,16 @@ class ClassMaskGenerator:
 
 
     @torch.no_grad()
-    def generate_mask(self, imgs, lbls, local_hint_ratio):
+    def generate_mask(self, imgs, lbls, pseudo_label_region, local_hint_ratio):
         B, C, H, W = imgs.shape
         ### Implement of Class Masking ###
         input_mask = torch.zeros((B, 1, H, W), device=imgs.device)
 
         mask_targets, hint_patch_nums = [], []
         for batch in range(B):
-            current_classes = torch.unique(lbls[batch])
+            # ignore non-reliable region
+            valid_mask = (pseudo_label_region[batch] == True)
+            current_classes = torch.unique(lbls[batch][valid_mask])
             # ignore "void" class
             void_mask = current_classes != 255
             current_classes = current_classes[void_mask]
@@ -68,6 +70,7 @@ class ClassMaskGenerator:
             mask_targets.append(mask_target.item())
             
             class_mask = (lbls[batch] == mask_target).float()
+            class_mask = torch.logical_and(class_mask, pseudo_label_region[batch]).float()
 
             unfolded_mask = torch.nn.functional.unfold(class_mask.unsqueeze(dim=0), 
                 kernel_size=self.mask_block_size, stride=self.mask_block_size)
@@ -102,9 +105,10 @@ class ClassMaskGenerator:
         return [input_mask], mask_targets, hint_patch_nums
 
     @torch.no_grad()
-    def mask_image(self, imgs, lbls, local_hint_ratio):
+    def mask_image(self, imgs, lbls, pseudo_label_region, local_hint_ratio):
         return_imgs = []
-        input_maskes, mask_targets, hint_patch_nums = self.generate_mask(imgs, lbls, local_hint_ratio)
+        input_maskes, mask_targets, hint_patch_nums = self.generate_mask(
+            imgs, lbls, pseudo_label_region, local_hint_ratio)
         for mask in input_maskes:
             return_imgs.append(imgs * mask)
         return return_imgs, mask_targets, hint_patch_nums

@@ -21,8 +21,10 @@ from tools import train
 
 # Discare the warnings in logger
 import warnings
+from tqdm import TqdmExperimentalWarning
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=TqdmExperimentalWarning)
 
 def run_command(command):
     p = subprocess.Popen(
