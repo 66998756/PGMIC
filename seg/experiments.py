@@ -272,10 +272,22 @@ def generate_experiment_cfgs(id):
             cfg['uda']['mask_alpha'] = mask_alpha
             cfg['uda']['mask_pseudo_threshold'] = mask_pseudo_threshold
             cfg['uda']['mask_lambda'] = mask_lambda
+            # cfg['uda']['mask_generator'] = dict(
+            #     type='block',
+            #     mask_ratio=mask_ratio,
+            #     mask_block_size=mask_block_size,
+            #     _delete_=True)
+            # =========================
+            # 這邊加了自己的東西
+            # ==========================
+            cfg['uda']['consistency_mode'] = consistency_mode
+            cfg['uda']['consistency_lambda'] = consistency_lambda
+
             cfg['uda']['mask_generator'] = dict(
-                type='block',
+                type=guide_type,
                 mask_ratio=mask_ratio,
                 mask_block_size=mask_block_size,
+                hint_ratio=hint_ratio,
                 _delete_=True)
 
         # Setup optimizer and schedule
@@ -530,6 +542,31 @@ def generate_experiment_cfgs(id):
         source, target, uda = 'cityscapes', 'cityscapes', 'dacs_srconly'
         mask_mode, mask_block_size, mask_ratio = 'separatesrc', 32, 0.7
         for seed in seeds:
+            cfg = config_from_vars()
+            cfgs.append(cfg)
+    #### 自己實現的部分，用 id == 84 修改
+    elif id == 86:
+        seeds = [1, 2]
+        source, target = 'gta', 'cityscapes'
+        architecture, backbone = 'daformer_sepaspp', 'mitb5'
+        # uda, rcs_T, plcrop = 'dacs_a999', 0.01, 'v2' # plcrop是把cs下面切掉的mask
+        uda, rcs_T, plcrop = 'dacs_a999_fdthings', 0.01, 'v2'
+        # The patch sizes are divided by 2 here, as DAFormer uses half resolution
+        block_sizes = [64]
+        ratios = [0.7]
+        # 自己的東西
+        consistency_mode='fixmatch_like'
+        mask_lambda=0.5
+        consistency_lambda=0.5
+        # mask gen
+        guide_type='class'
+        hint_ratio=0.0
+        ### 
+        mask_mode = 'separatetrgaug'
+        for mask_block_size, mask_ratio, seed in \
+                itertools.product(block_sizes, ratios, seeds):
+            if mask_block_size == 32 and mask_ratio == 0.7:
+                continue  # already run in exp 81
             cfg = config_from_vars()
             cfgs.append(cfg)
     else:

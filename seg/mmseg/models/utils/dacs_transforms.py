@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 
 from torchvision import transforms
-from randaugment import RandAugment
+from mmseg.models.utils.randaugment import RandAugment
 
 
 def strong_transform(param, data=None, target=None, mode=None):
@@ -28,7 +28,7 @@ def strong_transform(param, data=None, target=None, mode=None):
         data, target = unimatch_blur(blur=param['blur'], data=data, target=target)
         
     elif mode == 'fixmatch':
-        augment = RandAugment()
+        augment = RandAugment(2, 9)
         data = apply_randaugment(
             data, 
             mean=param['mean'], 
@@ -175,5 +175,8 @@ def unimatch_gray_scale(data):
 
 def apply_randaugment(data, mean, std, transform):
     denorm_(data, mean, std)
-    data = transform(data)
+    for batch in range(data.shape[0]):
+        # print(data[batch].shape)
+        data[batch] = transform(data[batch])
     renorm_(data, mean, std)
+    return data

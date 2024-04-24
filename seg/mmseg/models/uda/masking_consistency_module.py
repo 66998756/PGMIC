@@ -181,8 +181,8 @@ class MaskingConsistencyModule(Module):
                 'std': stds[0].unsqueeze(0)
             }
             auged_img, _ = strong_transform(
-                strong_parameters, data=masked_img.clone())
-            auged_img = self.strong_augment(auged_img)
+                strong_parameters, data=masked_img.clone(), mode='fixmatch')
+            # print(auged_img.shape)
             
 
 

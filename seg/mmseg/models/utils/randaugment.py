@@ -1,24 +1,15 @@
 # code in this file is adpated from rpmcruz/autoaugment
 # https://github.com/rpmcruz/autoaugment/blob/master/transformations.py
-# import random
+import random
 
-# import PIL, PIL.ImageOps, PIL.ImageEnhance, PIL.ImageDraw
-# import numpy as np
-# import torch
-# from PIL import Image
-
-
-import math
-from enum import Enum
-from typing import Dict, List, Optional, Tuple
-
+import PIL, PIL.ImageOps, PIL.ImageEnhance, PIL.ImageDraw
+import numpy as np
 import torch
-from torch import Tensor
+from PIL import Image
 
-from torchvision.transforms import functional as F, InterpolationMode
+import torchvision
+import torchvision.transforms.functional as F
 
-
-"""
 def ShearX(img, v):  # [-0.3, 0.3]
     assert -0.3 <= v <= 0.3
     if random.random() > 0.5:
@@ -192,30 +183,52 @@ def augment_list():  # 16 oeprations and their ranges
     # ]
 
     # https://github.com/tensorflow/tpu/blob/8462d083dd89489a79e3200bcc8d4063bf362186/models/official/efficientnet/autoaugment.py#L505
-    # 把會造成像素偏移的 aug 全部刪除
+    # l = [
+    #     (AutoContrast, 0, 1),
+    #     (Equalize, 0, 1),
+    #     (Invert, 0, 1),
+    #     (Rotate, 0, 30),
+    #     (Posterize, 0, 4),
+    #     (Solarize, 0, 256),
+    #     (SolarizeAdd, 0, 110),
+    #     (Color, 0.1, 1.9),
+    #     (Contrast, 0.1, 1.9),
+    #     (Brightness, 0.1, 1.9),
+    #     (Sharpness, 0.1, 1.9),
+    #     (ShearX, 0., 0.3),
+    #     (ShearY, 0., 0.3),
+    #     (CutoutAbs, 0, 40),
+    #     (TranslateXabs, 0., 100),
+    #     (TranslateYabs, 0., 100),
+    # ]
+
+    # 這裡把所有變形的全註解
     l = [
-        (AutoContrast, 0, 1),
-        (Equalize, 0, 1),
-        (Invert, 0, 1),
-        # (Rotate, 0, 30),
-        (Posterize, 0, 4),
-        (Solarize, 0, 256),
-        (SolarizeAdd, 0, 110),
-        (Color, 0.1, 1.9),
-        (Contrast, 0.1, 1.9),
-        (Brightness, 0.1, 1.9),
-        (Sharpness, 0.1, 1.9),
-        # (ShearX, 0., 0.3),
-        # (ShearY, 0., 0.3),
-        # (CutoutAbs, 0, 40),
-        # (TranslateXabs, 0., 100),
-        # (TranslateYabs, 0., 100),
+        # (Identity, 0., 1.0), # 強制一定要aug
+        # (ShearX, 0., 0.3),  # 0
+        # (ShearY, 0., 0.3),  # 1
+        # (TranslateX, 0., 0.33),  # 2
+        # (TranslateY, 0., 0.33),  # 3
+        # (Rotate, 0, 30),  # 4
+        (AutoContrast, 0, 1),  # 5
+        (Invert, 0, 1),  # 6
+        (Equalize, 0, 1),  # 7
+        (Solarize, 0, 110),  # 8
+        (Posterize, 4, 8),  # 9
+        (Contrast, 0.1, 1.9),  # 10
+        (Color, 0.1, 1.9),  # 11
+        (Brightness, 0.1, 1.9),  # 12
+        (Sharpness, 0.1, 1.9),  # 13
+        # (Cutout, 0, 0.2),  # 14
+        # (SamplePairing(imgs), 0, 0.4),  # 15
     ]
 
     return l
 
 
 class Lighting(object):
+    """Lighting noise(AlexNet - style PCA - based noise)"""
+
     def __init__(self, alphastd, eigval, eigvec):
         self.alphastd = alphastd
         self.eigval = torch.Tensor(eigval)
@@ -235,6 +248,9 @@ class Lighting(object):
 
 
 class CutoutDefault(object):
+    """
+    Reference : https://github.com/quark0/darts/blob/master/cnn/utils.py
+    """
     def __init__(self, length):
         self.length = length
 
@@ -263,185 +279,11 @@ class RandAugment:
         self.augment_list = augment_list()
 
     def __call__(self, img):
+        torchvision.utils.save_image(img, "/home/Bill0041/paper/PGMIC/seg/debug_tensor.jpg")
+        img = F.to_pil_image(img)
         ops = random.choices(self.augment_list, k=self.n)
         for op, minval, maxval in ops:
             val = (float(self.m) / 30) * float(maxval - minval) + minval
             img = op(img, val)
-
-        return img
-"""
-
-
-def _apply_op(
-    img: Tensor, op_name: str, magnitude: float, interpolation: InterpolationMode, fill: Optional[List[float]]
-):
-    if op_name == "ShearX":
-        # magnitude should be arctan(magnitude)
-        # official autoaug: (1, level, 0, 0, 1, 0)
-        # https://github.com/tensorflow/models/blob/dd02069717128186b88afa8d857ce57d17957f03/research/autoaugment/augmentation_transforms.py#L290
-        # compared to
-        # torchvision:      (1, tan(level), 0, 0, 1, 0)
-        # https://github.com/pytorch/vision/blob/0c2373d0bba3499e95776e7936e207d8a1676e65/torchvision/transforms/functional.py#L976
-        img = F.affine(
-            img,
-            angle=0.0,
-            translate=[0, 0],
-            scale=1.0,
-            shear=[math.degrees(math.atan(magnitude)), 0.0],
-            interpolation=interpolation,
-            fill=fill,
-            center=[0, 0],
-        )
-    elif op_name == "ShearY":
-        # magnitude should be arctan(magnitude)
-        # See above
-        img = F.affine(
-            img,
-            angle=0.0,
-            translate=[0, 0],
-            scale=1.0,
-            shear=[0.0, math.degrees(math.atan(magnitude))],
-            interpolation=interpolation,
-            fill=fill,
-            center=[0, 0],
-        )
-    elif op_name == "TranslateX":
-        img = F.affine(
-            img,
-            angle=0.0,
-            translate=[int(magnitude), 0],
-            scale=1.0,
-            interpolation=interpolation,
-            shear=[0.0, 0.0],
-            fill=fill,
-        )
-    elif op_name == "TranslateY":
-        img = F.affine(
-            img,
-            angle=0.0,
-            translate=[0, int(magnitude)],
-            scale=1.0,
-            interpolation=interpolation,
-            shear=[0.0, 0.0],
-            fill=fill,
-        )
-    elif op_name == "Rotate":
-        img = F.rotate(img, magnitude, interpolation=interpolation, fill=fill)
-    elif op_name == "Brightness":
-        img = F.adjust_brightness(img, 1.0 + magnitude)
-    elif op_name == "Color":
-        img = F.adjust_saturation(img, 1.0 + magnitude)
-    elif op_name == "Contrast":
-        img = F.adjust_contrast(img, 1.0 + magnitude)
-    elif op_name == "Sharpness":
-        img = F.adjust_sharpness(img, 1.0 + magnitude)
-    elif op_name == "Posterize":
-        img = F.posterize(img, int(magnitude))
-    elif op_name == "Solarize":
-        img = F.solarize(img, magnitude)
-    elif op_name == "AutoContrast":
-        img = F.autocontrast(img)
-    elif op_name == "Equalize":
-        img = F.equalize(img)
-    elif op_name == "Invert":
-        img = F.invert(img)
-    elif op_name == "Identity":
-        pass
-    else:
-        raise ValueError(f"The provided operator {op_name} is not recognized.")
-    return img
-
-
-class RandAugment(torch.nn.Module):
-    r"""RandAugment data augmentation method based on
-    `"RandAugment: Practical automated data augmentation with a reduced search space"
-    <https://arxiv.org/abs/1909.13719>`_.
-    If the image is torch Tensor, it should be of type torch.uint8, and it is expected
-    to have [..., 1 or 3, H, W] shape, where ... means an arbitrary number of leading dimensions.
-    If img is PIL Image, it is expected to be in mode "L" or "RGB".
-
-    Args:
-        num_ops (int): Number of augmentation transformations to apply sequentially.
-        magnitude (int): Magnitude for all the transformations.
-        num_magnitude_bins (int): The number of different magnitude values.
-        interpolation (InterpolationMode): Desired interpolation enum defined by
-            :class:`torchvision.transforms.InterpolationMode`. Default is ``InterpolationMode.NEAREST``.
-            If input is Tensor, only ``InterpolationMode.NEAREST``, ``InterpolationMode.BILINEAR`` are supported.
-        fill (sequence or number, optional): Pixel fill value for the area outside the transformed
-            image. If given a number, the value is used for all bands respectively.
-    """
-
-    def __init__(
-        self,
-        num_ops: int = 2,
-        magnitude: int = 9,
-        num_magnitude_bins: int = 31,
-        interpolation: InterpolationMode = InterpolationMode.NEAREST,
-        fill: Optional[List[float]] = None,
-    ) -> None:
-        super().__init__()
-        self.num_ops = num_ops
-        self.magnitude = magnitude
-        self.num_magnitude_bins = num_magnitude_bins
-        self.interpolation = interpolation
-        self.fill = fill
-
-    # 不使用會使像素偏移的augmentation
-    def _augmentation_space(self, num_bins: int, image_size: Tuple[int, int]) -> Dict[str, Tuple[Tensor, bool]]:
-        return {
-            # op_name: (magnitudes, signed)
-            "Identity": (torch.tensor(0.0), False),
-            # "ShearX": (torch.linspace(0.0, 0.3, num_bins), True),
-            # "ShearY": (torch.linspace(0.0, 0.3, num_bins), True),
-            # "TranslateX": (torch.linspace(0.0, 150.0 / 331.0 * image_size[1], num_bins), True),
-            # "TranslateY": (torch.linspace(0.0, 150.0 / 331.0 * image_size[0], num_bins), True),
-            # "Rotate": (torch.linspace(0.0, 30.0, num_bins), True),
-            "Brightness": (torch.linspace(0.0, 0.9, num_bins), True),
-            "Color": (torch.linspace(0.0, 0.9, num_bins), True),
-            "Contrast": (torch.linspace(0.0, 0.9, num_bins), True),
-            "Sharpness": (torch.linspace(0.0, 0.9, num_bins), True),
-            "Posterize": (8 - (torch.arange(num_bins) / ((num_bins - 1) / 4)).round().int(), False),
-            "Solarize": (torch.linspace(255.0, 0.0, num_bins), False),
-            "AutoContrast": (torch.tensor(0.0), False),
-            "Equalize": (torch.tensor(0.0), False),
-        }
-
-    def forward(self, img: Tensor) -> Tensor:
-        """
-            img (PIL Image or Tensor): Image to be transformed.
-
-        Returns:
-            PIL Image or Tensor: Transformed image.
-        """
-        fill = self.fill
-        channels, height, width = F.get_dimensions(img)
-        if isinstance(img, Tensor):
-            if isinstance(fill, (int, float)):
-                fill = [float(fill)] * channels
-            elif fill is not None:
-                fill = [float(f) for f in fill]
-
-        op_meta = self._augmentation_space(self.num_magnitude_bins, (height, width))
-        for _ in range(self.num_ops):
-            op_index = int(torch.randint(len(op_meta), (1,)).item())
-            op_name = list(op_meta.keys())[op_index]
-            magnitudes, signed = op_meta[op_name]
-            magnitude = float(magnitudes[self.magnitude].item()) if magnitudes.ndim > 0 else 0.0
-            if signed and torch.randint(2, (1,)):
-                magnitude *= -1.0
-            img = _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
-
-        return img
-
-
-    def __repr__(self) -> str:
-        s = (
-            f"{self.__class__.__name__}("
-            f"num_ops={self.num_ops}"
-            f", magnitude={self.magnitude}"
-            f", num_magnitude_bins={self.num_magnitude_bins}"
-            f", interpolation={self.interpolation}"
-            f", fill={self.fill}"
-            f")"
-        )
-        return s
+        img.save("/home/Bill0041/paper/PGMIC/seg/debug.jpg") 
+        return F.to_tensor(img)
